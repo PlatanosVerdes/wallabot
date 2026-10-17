@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/telegram"
+	"github.com/PlatanosVerdes/wallabot/internal/telegram"
 )
 
 func TestParse(t *testing.T) {

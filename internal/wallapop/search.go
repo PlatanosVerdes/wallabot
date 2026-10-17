@@ -10,6 +10,16 @@ var PathSearch = "/api/v3/search"
 
 const ItemURL = "https://es.wallapop.com/item/"
 
+type Price struct {
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
+}
+
+// Flag is the API's yes/no: {"flag": true}, or absent for no.
+type Flag struct {
+	Flag bool `json:"flag"`
+}
+
 type Image struct {
 	URLs struct {
 		Small  string `json:"small"`

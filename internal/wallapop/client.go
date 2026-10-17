@@ -1,11 +1,10 @@
-// Package wallapop uses the web app's private API: the official one is only for PRO sellers.
+// Package wallapop uses the web app's private API anonymously: no account, no token.
 package wallapop
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,38 +15,29 @@ import (
 
 const (
 	DefaultBaseURL   = "https://api.wallapop.com"
+	DefaultWebURL    = "https://es.wallapop.com"
 	DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
 	// The web build number: the API ignores it, but a real request carries it.
 	DefaultAppVersion = "826680"
 )
 
-var (
-	// ErrUnauthorized means a human has to import a new session.
-	ErrUnauthorized  = errors.New("wallapop: session rejected")
-	ErrAccessExpired = errors.New("wallapop: access token expired")
-)
-
 type Client struct {
 	BaseURL string
-	// WebURL is where sessions are renewed.
+	// WebURL serves a listing's page, which carries the details the API leaves out.
 	WebURL     string
 	Scheme     SignScheme
 	UserAgent  string
 	AppVersion string
-	// DeviceID is the session token's device_id claim, so it matches the browser.
-	DeviceID string
-	Session  TokenSource
-	HTTP     *http.Client
+	HTTP       *http.Client
 }
 
-func New(session TokenSource) *Client {
+func New() *Client {
 	return &Client{
 		BaseURL:    DefaultBaseURL,
 		WebURL:     DefaultWebURL,
 		Scheme:     SchemeNone,
 		UserAgent:  DefaultUserAgent,
 		AppVersion: DefaultAppVersion,
-		Session:    session,
 		HTTP:       &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -72,72 +62,26 @@ func (c *Client) setCommonHeaders(req *http.Request) {
 	req.Header.Set("deviceos", "0")
 	req.Header.Set("X-DeviceOS", "0")
 	req.Header.Set("X-AppVersion", c.AppVersion)
-	if c.DeviceID != "" {
-		req.Header.Set("X-DeviceId", c.DeviceID)
-	}
 }
 
-// do renews and retries once on a spent access token, like the web app's interceptor.
-func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any) (http.Header, error) {
-	var encoded []byte
-	if body != nil {
-		var err error
-		encoded, err = json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("encoding body for %s: %w", path, err)
-		}
-	}
-
-	header, err := c.attempt(ctx, method, path, query, encoded, out, true)
-	if !errors.Is(err, ErrAccessExpired) {
-		return header, err
-	}
-	if err := c.RenewSession(ctx); err != nil {
-		return header, err
-	}
-	header, err = c.attempt(ctx, method, path, query, encoded, out, true)
-	if errors.Is(err, ErrAccessExpired) {
-		return header, fmt.Errorf("%w: rejected right after a renewal", ErrUnauthorized)
-	}
-	return header, err
-}
-
-// public sends no bearer on purpose, so watching searches is not tied to the account.
+// public sends no bearer on purpose, so watching searches is not tied to an account.
 func (c *Client) public(ctx context.Context, path string, query url.Values, out any) error {
-	_, err := c.attempt(ctx, "GET", path, query, nil, out, false)
-	return err
-}
-
-func (c *Client) attempt(ctx context.Context, method, path string, query url.Values, body []byte, out any, auth bool) (http.Header, error) {
-	var payload io.Reader
-	if body != nil {
-		payload = bytes.NewReader(body)
-	}
-
+	const method = "GET"
 	target := c.BaseURL + path
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, method, target, payload)
+	req, err := http.NewRequestWithContext(ctx, method, target, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	c.setCommonHeaders(req)
-	if auth {
-		req.Header.Set("Authorization", "Bearer "+c.Session.AccessToken())
-	} else {
-		// The device id would still tie an anonymous call to the account.
-		req.Header.Del("X-DeviceId")
-	}
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
 	if c.Scheme != SchemeNone {
 		ts := time.Now().UnixMilli()
 		signature, err := Sign(c.Scheme, method, path, ts)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		req.Header.Set("X-Signature", signature)
 		req.Header.Set("Timestamp", strconv.FormatInt(ts, 10))
@@ -145,29 +89,25 @@ func (c *Client) attempt(ctx context.Context, method, path string, query url.Val
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("calling %s: %w", path, err)
+		return fmt.Errorf("calling %s: %w", path, err)
 	}
 	defer resp.Body.Close()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", path, err)
+		return fmt.Errorf("reading %s: %w", path, err)
 	}
-
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
-		return resp.Header, classify(resp.StatusCode, resp.Header, path, raw)
-	case resp.StatusCode >= 400:
-		return resp.Header, &apiError{Status: resp.StatusCode, Path: path, Body: snippet(raw)}
+	if resp.StatusCode >= 400 {
+		return &apiError{Status: resp.StatusCode, Path: path, Body: snippet(raw)}
 	}
 
 	if out == nil || len(raw) == 0 {
-		return resp.Header, nil
+		return nil
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return resp.Header, fmt.Errorf("decoding %s: %w (body: %s)", path, err, snippet(raw))
+		return fmt.Errorf("decoding %s: %w (body: %s)", path, err, snippet(raw))
 	}
-	return resp.Header, nil
+	return nil
 }
 
 func snippet(b []byte) string {

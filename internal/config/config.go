@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/places"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/places"
+	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
 )
 
 type Config struct {
@@ -16,23 +16,17 @@ type Config struct {
 	BaseURL    string
 	WebURL     string
 	Scheme     wallapop.SignScheme
-	DeviceID   string
 	AppVersion string
 
-	Interval   time.Duration
+	// RetryEvery is the shortest wait after a failed round.
 	RetryEvery time.Duration
 	Port       int
 
-	MinPause  time.Duration
-	MaxPause  time.Duration
-	MaxPerRun int
-
 	// Pushgateway is empty outside the Pi.
 	Pushgateway string
-	WarnBefore  time.Duration
 
 	TelegramToken string
-	// TelegramChat is the owner's, the only one told about the catalogue and the session.
+	// TelegramChat is the owner's: always let in, and the default for "searches add".
 	TelegramChat string
 	// The bot is public and every search is requests from the Pi, hence the caps.
 	MaxSearches    int
@@ -63,16 +57,10 @@ func Load() (Config, error) {
 		BaseURL:     env("WALLA_BASE_URL", wallapop.DefaultBaseURL),
 		WebURL:      env("WALLA_WEB_URL", wallapop.DefaultWebURL),
 		Scheme:      wallapop.SignScheme(env("WALLA_SIGN_SCHEME", string(wallapop.SchemeNone))),
-		DeviceID:    env("WALLA_DEVICE_ID", ""),
 		AppVersion:  env("WALLA_APP_VERSION", wallapop.DefaultAppVersion),
-		Interval:    duration("WALLA_INTERVAL", 24*time.Hour),
 		RetryEvery:  duration("WALLA_RETRY_EVERY", 15*time.Minute),
 		Port:        number("WALLA_PORT", 8000),
-		MinPause:    duration("WALLA_MIN_PAUSE", 20*time.Second),
-		MaxPause:    duration("WALLA_MAX_PAUSE", 90*time.Second),
-		MaxPerRun:   number("WALLA_MAX_PER_RUN", 25),
 		Pushgateway: env("WALLA_PUSHGATEWAY", ""),
-		WarnBefore:  duration("WALLA_WARN_BEFORE", 72*time.Hour),
 
 		TelegramToken:  env("WALLA_TELEGRAM_TOKEN", ""),
 		TelegramChat:   env("WALLA_TELEGRAM_CHAT", ""),
@@ -98,12 +86,6 @@ func Load() (Config, error) {
 	if cfg.RetryEvery < time.Minute {
 		return cfg, fmt.Errorf("WALLA_RETRY_EVERY (%s) is under a minute, which would spin", cfg.RetryEvery)
 	}
-	if cfg.Interval < time.Minute {
-		return cfg, fmt.Errorf("WALLA_INTERVAL (%s) is under a minute, which would spin", cfg.Interval)
-	}
-	if cfg.MaxPause < cfg.MinPause {
-		return cfg, fmt.Errorf("WALLA_MAX_PAUSE (%s) is below WALLA_MIN_PAUSE (%s)", cfg.MaxPause, cfg.MinPause)
-	}
 	if cfg.WatchMin < time.Minute {
 		return cfg, fmt.Errorf("WALLA_WATCH_MIN (%s) is under a minute, which would spin", cfg.WatchMin)
 	}
@@ -118,15 +100,6 @@ func Load() (Config, error) {
 	}
 
 	// A change on their side should be a redeploy, not a rebuild.
-	if v := os.Getenv("WALLA_PATH_ITEMS"); v != "" {
-		wallapop.PathItems = v
-	}
-	if v := os.Getenv("WALLA_PATH_REACTIVATE"); v != "" {
-		wallapop.PathReactivate = v
-	}
-	if v := os.Getenv("WALLA_REACTIVATE_METHOD"); v != "" {
-		wallapop.ReactivateMethod = v
-	}
 	if v := os.Getenv("WALLA_PATH_SEARCH"); v != "" {
 		wallapop.PathSearch = v
 	}

@@ -1,22 +1,20 @@
 # Deploy
 
-Built from this repo by [rpi-services](https://github.com/PlatanosVerdes/rpi-services),
-pinned to the CalVer tag that `auto-tag.yml` creates on every push to main.
+Deployed by [rpi-services](https://github.com/PlatanosVerdes/rpi-services) from the image on GHCR,
+pinned to the CalVer tag that `release.yml` creates on every push to main.
 
 Entry for its `docker-compose.yml`:
 
 ```yaml
-  # --- Wallapop: reactivate expired listings daily, and the searches bot ---
-  wallapop-manager:
-    build:
-      context: https://github.com/PlatanosVerdes/wallapop-manager.git#${WALLAPOP_VERSION}
-      args:
-        VERSION: ${WALLAPOP_VERSION}
-    container_name: wallapop-manager
+  # --- Wallabot: the public bot that watches Wallapop searches ---
+  wallabot:
+    image: ghcr.io/platanosverdes/wallabot:${WALLABOT_VERSION}
+    container_name: wallabot
     labels:
-      prometheus.probe: "http://wallapop-manager:8000/healthz"
+      prometheus.probe: "http://wallabot:8000/healthz"
     restart: unless-stopped
     profiles: [wallapop, all]
+    # Hashing a thumbnail decodes it first.
     mem_limit: 128m
     memswap_limit: 128m
     dns:
@@ -32,29 +30,17 @@ Entry for its `docker-compose.yml`:
       # The owner's chat, always a user of the bot.
       WALLA_TELEGRAM_CHAT: ${WALLA_TELEGRAM_CHAT}
     volumes:
-      # The session, the users and what has been seen for each of them.
-      - ${APP_CONFIG_PATH}/wallapop-manager:/data
+      # The users, their searches and what has been seen for each of them.
+      - ${APP_CONFIG_PATH}/wallabot:/data
 ```
-
-The memory limit goes up from 64m because a round decodes thumbnails to hash them.
-
-The session is the only manual step, and only when the cookie finally expires:
-
-```bash
-docker exec wallapop-manager wallapop session import --cookie '<the __Secure-next-auth.session-token value>'
-docker exec wallapop-manager wallapop session show
-```
-
-The import renews once before reporting success, so it doubles as the check.
 
 Who uses the bot and what they look for, and a round without waiting for the clock:
 
 ```bash
-docker exec wallapop-manager wallapop searches
-docker exec wallapop-manager wallapop searches add --chat <id> '<address of a web search>'
-docker exec wallapop-manager wallapop watch --dry-run
-docker exec wallapop-manager wallapop run --dry-run
+docker exec wallabot wallabot searches
+docker exec wallabot wallabot searches add --chat <id> '<address of a web search>'
+docker exec wallabot wallabot watch --dry-run
 ```
 
-Searches live in `searches.json` and are added, silenced and deleted from the bot. Nothing
-in the watcher writes to, or even reads, the Wallapop account.
+Searches live in `searches.json` and are added, silenced and deleted from the bot. Nothing in the
+watcher reads or writes a Wallapop account.

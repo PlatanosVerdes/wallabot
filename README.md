@@ -1,11 +1,8 @@
-# wallapop-manager
+# wallabot
 
-One binary, two jobs:
+**[@WuallaBot](https://t.me/WuallaBot)**: a public Telegram bot that tells you when something new appears in your Wallapop searches.
 
-- **[@WuallaBot](https://t.me/WuallaBot)**: a public Telegram bot that tells you when something new appears in your Wallapop searches.
-- **Catalogue**: reactivates my expired Wallapop listings once a day.
-
-Runs on the Raspberry from [rpi-services](https://github.com/PlatanosVerdes/rpi-services). Go, no dependencies, CalVer tag on every push to main.
+Runs on the Raspberry from [rpi-services](https://github.com/PlatanosVerdes/rpi-services). Go, no dependencies, CalVer tag on every push to main. Reactivating my own listings is a separate service, [wallapop-catalogue](https://github.com/PlatanosVerdes/wallapop-catalogue).
 
 ## The bot
 
@@ -48,7 +45,7 @@ Each chat only sees its own searches. Up to `WALLA_MAX_USERS` chats, `WALLA_MAX_
 - The **first round** of a new search is silent: those listings were already there.
 - **Duplicates** (the same vehicle posted by many dealer accounts) are detected by photo: a 64-bit image hash plus a similar price.
 - A known listing that gets **5% cheaper** than its lowest price is announced again.
-- Searches need no Wallapop account. Only the catalogue uses my session.
+- Searches need no Wallapop account: every request is anonymous.
 
 ## Search API notes
 
@@ -61,16 +58,6 @@ The bot uses Wallapop's private `GET /api/v3/search`, which needs no login.
 | `distance` | Ignored by the API |
 | `order_by` | Always forced to `newest` |
 
-## Catalogue and session
-
-Reactivates expired listings with `GET /api/v3/user/items` and `PUT /api/v3/items/{id}/reactivate`, once a day, with a random pause between listings.
-
-The session is the browser cookie `__Secure-next-auth.session-token`. The service renews the 5-minute token from it on its own; the cookie lasts about a month. To import it, copy it from DevTools (Application → Cookies → es.wallapop.com):
-
-```bash
-wallapop session import --cookie '<value>'
-```
-
 ## Data
 
 In `WALLA_DATA_DIR`:
@@ -79,18 +66,15 @@ In `WALLA_DATA_DIR`:
 | :--- | :--- |
 | `searches.json` | Every chat and its searches |
 | `users/<chat>/seen.json` | What that chat has already been told |
-| `session.json` | The catalogue session |
-| `last_run.json`, `last_watch.json` | Last catalogue pass and last round |
+| `last_watch.json` | The last round |
 
 ## CLI
 
 ```bash
-wallapop serve                          # everything: bot, rounds, daily pass, /healthz
-wallapop watch --dry-run                # one round, print instead of send
-wallapop searches                       # every chat and its searches
-wallapop searches add --chat <id> '<address or text>'
-wallapop run --dry-run                  # what the catalogue pass would reactivate
-wallapop session show | refresh         # check the session
+wallabot serve                          # the bot, the rounds, /healthz
+wallabot watch --dry-run                # one round, print instead of send
+wallabot searches                       # every chat and its searches
+wallabot searches add --chat <id> '<address or text>'
 ```
 
 ## Configuration
@@ -111,20 +95,16 @@ wallapop session show | refresh         # check the session
 | `WALLA_WATCH_DROP` | `5` | % drop to announce a cheaper listing (`0` = off) |
 | `WALLA_SEEN_TTL` | `720h` | How long a listing is remembered |
 | `WALLA_PLACES_URL` | Nominatim | Geocoder for `en <town>` (empty = off) |
-| `WALLA_INTERVAL` | `24h` | Time between catalogue passes |
-| `WALLA_RETRY_EVERY` | `15m` | Retry after a failed pass |
-| `WALLA_MIN_PAUSE` / `MAX_PAUSE` | `20s` / `90s` | Pause between reactivations |
-| `WALLA_MAX_PER_RUN` | `25` | Listings touched per pass |
-| `WALLA_WARN_BEFORE` | `72h` | `/healthz` warns this long before the cookie expires |
+| `WALLA_RETRY_EVERY` | `15m` | Shortest wait after a failed round |
 | `WALLA_DATA_DIR` | `./data` | Data folder |
 | `WALLA_PORT` | `8000` | `/healthz` port |
 | `WALLA_PUSHGATEWAY` | – | Where metrics go |
 | `WALLA_LOG_JSON` | – | `1` for JSON logs |
 
-Endpoints can be overridden without a rebuild: `WALLA_BASE_URL`, `WALLA_WEB_URL`, `WALLA_PATH_SEARCH`, `WALLA_PATH_ITEMS`, `WALLA_PATH_REACTIVATE`, `WALLA_REACTIVATE_METHOD`, `WALLA_SIGN_SCHEME`, `WALLA_DEVICE_ID`, `WALLA_APP_VERSION`.
+Endpoints can be overridden without a rebuild: `WALLA_BASE_URL`, `WALLA_WEB_URL`, `WALLA_PATH_SEARCH`, `WALLA_SIGN_SCHEME`, `WALLA_APP_VERSION`.
 
 ## Health
 
-`/healthz` always answers 200 while the process runs. Its `status` is `down` without a valid session, `warn` when the cookie is about to expire or the last pass failed, `ok` otherwise.
+`/healthz` always answers 200 while the process runs, with the last round and the next one. A failed search retries in minutes, so it does not change the `status`.
 
-Metrics go to the Pushgateway as `wallapop_*` gauges (catalogue) and `wallapop_watch_*` gauges (bot rounds).
+Metrics go to the Pushgateway as `wallapop_watch_*` gauges, under the job `wallapop-watch`.

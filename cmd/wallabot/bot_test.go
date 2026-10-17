@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/commands"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/config"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/telegram"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/users"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/commands"
+	"github.com/PlatanosVerdes/wallabot/internal/config"
+	"github.com/PlatanosVerdes/wallabot/internal/telegram"
+	"github.com/PlatanosVerdes/wallabot/internal/users"
+	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
 )
 
 const (

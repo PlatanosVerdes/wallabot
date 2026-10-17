@@ -15,23 +15,19 @@ func TestDefaultsAreUsable(t *testing.T) {
 		name  string
 		value time.Duration
 	}{
-		{"Interval", cfg.Interval},
 		{"RetryEvery", cfg.RetryEvery},
-		{"MinPause", cfg.MinPause},
-		{"MaxPause", cfg.MaxPause},
-		{"WarnBefore", cfg.WarnBefore},
+		{"WatchMin", cfg.WatchMin},
+		{"WatchMax", cfg.WatchMax},
+		{"DeepEvery", cfg.DeepEvery},
 	} {
 		if d.value <= 0 {
 			t.Errorf("%s defaulted to %s", d.name, d.value)
 		}
 	}
-	if cfg.RetryEvery >= cfg.Interval {
-		t.Errorf("RetryEvery (%s) should be shorter than Interval (%s)", cfg.RetryEvery, cfg.Interval)
-	}
 }
 
 func TestSpinningWaitsAreRefused(t *testing.T) {
-	for _, key := range []string{"WALLA_RETRY_EVERY", "WALLA_INTERVAL"} {
+	for _, key := range []string{"WALLA_RETRY_EVERY", "WALLA_WATCH_MIN"} {
 		t.Setenv(key, "0s")
 		if _, err := Load(); err == nil {
 			t.Errorf("%s=0s was accepted", key)

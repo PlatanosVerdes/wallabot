@@ -36,7 +36,7 @@ func TestListingMakesASearchLikeIt(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := New(nil)
+	client := New()
 	client.BaseURL, client.WebURL = server.URL, server.URL
 
 	listing, err := client.Listing(context.Background(), "kallax-negra-1305066398")
