@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
 )
 
 type Options struct {

@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
 )
 
 // Dealers repost one vehicle from many accounts, so the photo identifies it, not the title.

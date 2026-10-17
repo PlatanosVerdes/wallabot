@@ -47,7 +47,7 @@ func (f *Finder) Find(ctx context.Context, name string) (Place, bool, error) {
 		return Place{}, false, err
 	}
 	// Nominatim refuses requests that do not say who is asking.
-	req.Header.Set("User-Agent", "wallapop-manager (github.com/PlatanosVerdes/wallapop-manager)")
+	req.Header.Set("User-Agent", "wallabot (github.com/PlatanosVerdes/wallabot)")
 
 	resp, err := f.HTTP.Do(req)
 	if err != nil {

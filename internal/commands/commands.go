@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/telegram"
+	"github.com/PlatanosVerdes/wallabot/internal/telegram"
 )
 
 type Command struct {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
 )
 
 func item(id, user, title string, price float64, city string) wallapop.SearchItem {

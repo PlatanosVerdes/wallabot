@@ -14,14 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
 )
-
-type stubSession struct{}
-
-func (stubSession) AccessToken() string                    { return "token" }
-func (stubSession) SessionCookie() (string, string)        { return "cookie", "value" }
-func (stubSession) Update(string, string, time.Time) error { return nil }
 
 type recorder struct {
 	listings []string
@@ -109,7 +103,7 @@ func newItem(id, title string, price float64, age time.Duration, photo string) w
 
 func newWatcher(t *testing.T, fake *fakeWallapop) (*wallapop.Client, Options) {
 	srv := fake.server(t)
-	client := wallapop.New(stubSession{})
+	client := wallapop.New()
 	client.BaseURL = srv.URL
 	return client, Options{MaxAge: 24 * time.Hour, MaxAlerts: 10, PhotosPerItem: 1, SeenTTL: time.Hour, Pages: 3}
 }

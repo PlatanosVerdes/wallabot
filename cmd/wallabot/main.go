@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -19,35 +18,27 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/commands"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/config"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/metrics"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/places"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/reactivate"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/server"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/session"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/telegram"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/users"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/wallapop"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/watch"
+	"github.com/PlatanosVerdes/wallabot/internal/commands"
+	"github.com/PlatanosVerdes/wallabot/internal/config"
+	"github.com/PlatanosVerdes/wallabot/internal/metrics"
+	"github.com/PlatanosVerdes/wallabot/internal/places"
+	"github.com/PlatanosVerdes/wallabot/internal/server"
+	"github.com/PlatanosVerdes/wallabot/internal/telegram"
+	"github.com/PlatanosVerdes/wallabot/internal/users"
+	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/watch"
 )
 
 var buildVersion = "local"
 
-const usage = `wallapop-manager ` + "%s" + `
+const usage = `wallabot ` + "%s" + `
 
-  run [--dry-run]        one pass: reactivate everything expired
   watch [--dry-run] [--deep] [--chat <id>]
                          one round of everybody's searches
   searches               who uses the bot, and what each of them is looking for
   searches add [--chat <id>] [--name <name>] <address>
                          store a search made on the web
-  serve [--port] [--interval]
-                         daily pass, the watcher, the bot and /healthz
-  session import --cookie <value>
-                         store the browser session cookie (also reads it on stdin)
-  session show           what is stored and whether it can renew itself
-  session refresh        renew now, which is how you check the session works
+  serve [--port]         the rounds, the bot and /healthz
   sign <method> <path> <timestamp> [signature]
                          reproduce an X-Signature, or say which scheme matches a captured one
 
@@ -75,19 +66,14 @@ func run(args []string) error {
 		return err
 	}
 	log := newLogger(cfg.LogJSON)
-	store := session.NewStore(cfg.DataDir)
 
 	switch args[0] {
-	case "run":
-		return cmdRun(cfg, store, log, args[1:])
 	case "watch":
 		return cmdWatch(cfg, log, args[1:])
 	case "searches":
 		return cmdSearches(cfg, log, args[1:])
 	case "serve":
-		return cmdServe(cfg, store, log, args[1:])
-	case "session":
-		return cmdSession(cfg, store, args[1:])
+		return cmdServe(cfg, log, args[1:])
 	case "sign":
 		return cmdSign(cfg, args[1:])
 	case "help", "-h", "--help":
@@ -106,43 +92,18 @@ func newLogger(asJSON bool) *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stdout, nil))
 }
 
-func newClient(cfg config.Config, store *session.Store) *wallapop.Client {
-	client := wallapop.New(store)
+func newClient(cfg config.Config) *wallapop.Client {
+	client := wallapop.New()
 	client.BaseURL = cfg.BaseURL
 	client.WebURL = cfg.WebURL
 	client.Scheme = cfg.Scheme
 	client.AppVersion = cfg.AppVersion
-	client.DeviceID = cfg.DeviceID
-	if client.DeviceID == "" {
-		if sess := store.Current(); sess != nil {
-			client.DeviceID = sess.Device()
-		}
-	}
 	return client
 }
 
-func cmdRun(cfg config.Config, store *session.Store, log *slog.Logger, args []string) error {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	dryRun := fs.Bool("dry-run", false, "list what would be reactivated without touching anything")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	res := onePass(ctx, cfg, store, log, *dryRun)
-	fmt.Println(res.Summary())
-	if !res.OK() {
-		return errors.New("the pass did not finish clean")
-	}
-	return nil
-}
-
-func cmdServe(cfg config.Config, store *session.Store, log *slog.Logger, args []string) error {
+func cmdServe(cfg config.Config, log *slog.Logger, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	port := fs.Int("port", cfg.Port, "port for /healthz")
-	interval := fs.Duration("interval", cfg.Interval, "time between reactivation passes")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -155,16 +116,12 @@ func cmdServe(cfg config.Config, store *session.Store, log *slog.Logger, args []
 		return err
 	}
 
-	var next, nextWatch atomic.Int64
-	next.Store(time.Now().Unix())
+	var nextWatch atomic.Int64
 	nextWatch.Store(time.Now().Unix())
 	health := &server.Health{
-		Version:    buildVersion,
-		DataDir:    cfg.DataDir,
-		Store:      store,
-		WarnBefore: cfg.WarnBefore,
-		NextRun:    func() time.Time { return time.Unix(next.Load(), 0) },
-		NextWatch:  func() time.Time { return time.Unix(nextWatch.Load(), 0) },
+		Version:   buildVersion,
+		DataDir:   cfg.DataDir,
+		NextWatch: func() time.Time { return time.Unix(nextWatch.Load(), 0) },
 	}
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(*port),
@@ -181,27 +138,7 @@ func cmdServe(cfg config.Config, store *session.Store, log *slog.Logger, args []
 
 	// Rounds run on a random clock so the traffic has no fixed pattern.
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for {
-			res := onePass(ctx, cfg, store, log, false)
-
-			// Retry soon, so a session imported by hand works in minutes, not tomorrow.
-			wait := *interval
-			if !res.OK() {
-				wait = cfg.RetryEvery
-			}
-			at := time.Now().Add(wait)
-			next.Store(at.Unix())
-			log.Info("next pass", "at", at.Format(time.RFC3339), "after_failure", !res.OK())
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(wait):
-			}
-		}
-	}()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		lastDeep := time.Time{}
@@ -357,7 +294,7 @@ func parseSearch(ctx context.Context, cfg config.Config, input string) (url.Valu
 		return fromText(ctx, places.New(cfg.PlacesURL), input)
 	}
 	if slug, ok := wallapop.ItemSlug(input); ok {
-		listing, err := newClient(cfg, session.NewStore(cfg.DataDir)).Listing(ctx, slug)
+		listing, err := newClient(cfg).Listing(ctx, slug)
 		if err != nil {
 			return nil, "", err
 		}
@@ -434,8 +371,8 @@ func runWatch(ctx context.Context, cfg config.Config, people *users.Store, log *
 	if !r.DryRun && !bot.Enabled() {
 		log.Warn("no telegram configured, so nothing will be announced")
 	}
-	// Searches need no session. One catalogue per round, so a shared search is asked once.
-	catalogue := watch.NewCatalogue(newClient(cfg, session.NewStore(cfg.DataDir)), cfg.WatchMinPause, cfg.WatchMaxPause)
+	// One catalogue per round, so a shared search is asked once.
+	catalogue := watch.NewCatalogue(newClient(cfg), cfg.WatchMinPause, cfg.WatchMaxPause)
 
 	total := watch.Result{StartedAt: time.Now(), DryRun: r.DryRun, Deep: r.Deep}
 	for _, user := range people.Active() {
@@ -544,76 +481,6 @@ func (p printer) Say(_ context.Context, text string) error {
 	return nil
 }
 
-// onePass never sends a message itself: the alert rules decide.
-func onePass(ctx context.Context, cfg config.Config, store *session.Store, log *slog.Logger, dryRun bool) reactivate.Result {
-	report := func(res reactivate.Result) reactivate.Result {
-		if err := reactivate.SaveResult(cfg.DataDir, res); err != nil {
-			log.Error("could not save the run", "err", err)
-		}
-		if dryRun {
-			return res
-		}
-		if err := push(ctx, cfg, store, res); err != nil {
-			log.Error("could not push metrics", "err", err)
-		}
-		return res
-	}
-
-	if _, err := store.Load(); err != nil {
-		log.Error("no usable session", "err", err)
-		return report(reactivate.Result{StartedAt: time.Now(), Error: err.Error(), NeedsHuman: true})
-	}
-	client := newClient(cfg, store)
-
-	// The access token lasts five minutes, so it is always spent between passes.
-	if store.AccessSpent() {
-		if err := client.RenewSession(ctx); err != nil {
-			log.Error("the session could not be renewed", "err", err)
-			return report(reactivate.Result{StartedAt: time.Now(), Error: err.Error(), NeedsHuman: true})
-		}
-		log.Info("session renewed")
-	}
-
-	return report(reactivate.Run(ctx, client, reactivate.Options{
-		DryRun:    dryRun,
-		MinPause:  cfg.MinPause,
-		MaxPause:  cfg.MaxPause,
-		MaxPerRun: cfg.MaxPerRun,
-	}, log))
-}
-
-// Status: 0 fine, 1 a retry may fix it, 2 needs a human.
-func push(ctx context.Context, cfg config.Config, store *session.Store, res reactivate.Result) error {
-	status := 0.0
-	switch {
-	case res.NeedsHuman:
-		status = 2
-	case !res.OK():
-		status = 1
-	}
-
-	gauges := []metrics.Gauge{
-		{Name: "wallapop_last_run_status", Help: "0 fine, 1 failed, 2 needs a human", Value: status},
-		{Name: "wallapop_last_run_timestamp", Help: "Unix time of the last pass", Value: float64(time.Now().Unix())},
-		{Name: "wallapop_expired_listings", Help: "Listings found expired in the last pass", Value: float64(res.Expired)},
-		{Name: "wallapop_reactivated_listings", Help: "Listings reactivated in the last pass", Value: float64(len(res.Reactivated))},
-	}
-	// -1 when not known yet.
-	days := -1.0
-	if sess := store.Current(); sess != nil {
-		if left, ok := sess.Renewable(); ok {
-			days = left.Hours() / 24
-		}
-	}
-	gauges = append(gauges, metrics.Gauge{
-		Name:  "wallapop_session_days_remaining",
-		Help:  "Days before the session has to be imported again by hand",
-		Value: days,
-	})
-
-	return metrics.New(cfg.Pushgateway, "wallapop-manager").Push(ctx, gauges)
-}
-
 func pushWatch(ctx context.Context, cfg config.Config, res watch.Result) error {
 	status := 0.0
 	switch {
@@ -633,85 +500,6 @@ func pushWatch(ctx context.Context, cfg config.Config, res watch.Result) error {
 		{Name: "wallapop_watch_duplicates", Help: "Listings dropped as a copy of one already seen", Value: float64(res.Duplicates)},
 		{Name: "wallapop_watch_cheaper", Help: "Listings announced for falling below their own lowest price", Value: float64(len(res.Cheaper))},
 	})
-}
-
-func cmdSession(cfg config.Config, store *session.Store, args []string) error {
-	if len(args) == 0 {
-		return errors.New("session needs a subcommand: import, show or refresh")
-	}
-
-	switch args[0] {
-	case "import":
-		fs := flag.NewFlagSet("session import", flag.ExitOnError)
-		cookie := fs.String("cookie", "", "the "+session.DefaultCookieName+" cookie from the browser")
-		if err := fs.Parse(args[1:]); err != nil {
-			return err
-		}
-
-		var sess *session.Session
-		var err error
-		if *cookie != "" {
-			sess, err = session.Parse(*cookie)
-		} else {
-			var raw []byte
-			if raw, err = io.ReadAll(os.Stdin); err == nil {
-				sess, err = session.Parse(string(raw))
-			}
-		}
-		if err != nil {
-			return err
-		}
-		if err := store.Save(sess); err != nil {
-			return err
-		}
-		fmt.Printf("session stored in %s\n", store.Path())
-
-		// Renew now to prove the imported cookie works.
-		if err := newClient(cfg, store).RenewSession(context.Background()); err != nil {
-			return fmt.Errorf("stored, but it cannot mint a token: %w", err)
-		}
-		fmt.Println("renewed once, so the session works")
-		printSession(store.Current())
-		return nil
-
-	case "show":
-		sess, err := store.Load()
-		if err != nil {
-			return err
-		}
-		printSession(sess)
-		return nil
-
-	case "refresh":
-		if _, err := store.Load(); err != nil {
-			return err
-		}
-		if err := newClient(cfg, store).RenewSession(context.Background()); err != nil {
-			return err
-		}
-		fmt.Println("renewed")
-		printSession(store.Current())
-		return nil
-
-	default:
-		return fmt.Errorf("unknown session subcommand %q", args[0])
-	}
-}
-
-func printSession(sess *session.Session) {
-	fmt.Printf("cookie:    %s\n", sess.CookieName)
-	if claims, ok := sess.Claims(); ok {
-		fmt.Printf("user:      %s\n", claims.Sub)
-		fmt.Printf("device:    %s\n", sess.Device())
-		fmt.Printf("token:     %s left\n", time.Until(time.Unix(claims.Exp, 0)).Round(time.Second))
-	} else {
-		fmt.Println("token:     none minted yet")
-	}
-	if left, ok := sess.Renewable(); ok {
-		fmt.Printf("renewable: %s left (until %s)\n", left.Round(time.Hour), sess.Expires.Format(time.RFC3339))
-	} else {
-		fmt.Println("renewable: unknown until the first renewal")
-	}
 }
 
 // cmdSign is kept for when Wallapop brings request signing back.

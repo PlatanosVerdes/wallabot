@@ -1,3 +1,3 @@
-module github.com/PlatanosVerdes/wallapop-manager
+module github.com/PlatanosVerdes/wallabot
 
 go 1.26.6

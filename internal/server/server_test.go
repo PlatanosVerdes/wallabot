@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/wallapop-manager/internal/reactivate"
-	"github.com/PlatanosVerdes/wallapop-manager/internal/session"
+	"github.com/PlatanosVerdes/wallabot/internal/watch"
 )
 
 func get(t *testing.T, h *Health) (int, map[string]any) {
@@ -24,106 +22,29 @@ func get(t *testing.T, h *Health) (int, map[string]any) {
 	return rec.Code, body
 }
 
-func TestHealthAnswers200WithNoSession(t *testing.T) {
-	dir := t.TempDir()
-	code, body := get(t, &Health{Version: "test", DataDir: dir, Store: session.NewStore(dir)})
-
-	if code != http.StatusOK {
-		t.Fatalf("answered %d, expected 200 while the process is alive", code)
+func TestHealthAnswersBeforeTheFirstRound(t *testing.T) {
+	code, body := get(t, &Health{Version: "test", DataDir: t.TempDir()})
+	if code != http.StatusOK || body["status"] != "ok" {
+		t.Fatalf("answered %d with %v", code, body)
 	}
-	if body["status"] != "down" {
-		t.Errorf("status is %q, expected down", body["status"])
+	if _, ok := body["last_watch"]; ok {
+		t.Errorf("a round was reported before any ran: %v", body)
 	}
 }
 
-func TestHealthReportsTheSession(t *testing.T) {
+func TestHealthReportsTheRounds(t *testing.T) {
 	dir := t.TempDir()
-	store := session.NewStore(dir)
-	sess := session.New("a.b.c.d.e")
-	sess.Expires = time.Now().Add(20 * 24 * time.Hour)
-	if err := store.Save(sess); err != nil {
+	if err := watch.SaveResult(dir, watch.Result{Users: 3, Watched: 7}); err != nil {
 		t.Fatal(err)
 	}
+	next := time.Date(2026, 10, 18, 1, 0, 0, 0, time.UTC)
 
-	code, body := get(t, &Health{Version: "test", DataDir: dir, Store: store, WarnBefore: 72 * time.Hour})
-	if code != http.StatusOK {
-		t.Fatalf("answered %d", code)
+	_, body := get(t, &Health{DataDir: dir, NextWatch: func() time.Time { return next }})
+	last, ok := body["last_watch"].(map[string]any)
+	if !ok || last["users"] != 3.0 || last["watched"] != 7.0 {
+		t.Errorf("last_watch came back as %v", body["last_watch"])
 	}
-	if body["status"] != "ok" {
-		t.Errorf("status is %q, expected ok", body["status"])
-	}
-	if days, _ := body["renewable_days_left"].(float64); days < 19 || days > 20 {
-		t.Errorf("renewable_days_left is %v, expected about 20", body["renewable_days_left"])
-	}
-}
-
-func TestHealthWarnsOnAnExpiringSession(t *testing.T) {
-	dir := t.TempDir()
-	store := session.NewStore(dir)
-	sess := session.New("a.b.c.d.e")
-	sess.Expires = time.Now().Add(12 * time.Hour)
-	if err := store.Save(sess); err != nil {
-		t.Fatal(err)
-	}
-
-	_, body := get(t, &Health{DataDir: dir, Store: store, WarnBefore: 72 * time.Hour})
-	if body["status"] != "warn" {
-		t.Errorf("status is %q, expected warn", body["status"])
-	}
-}
-
-func TestHealthKeepsTheSpecificReason(t *testing.T) {
-	dir := t.TempDir()
-	if err := reactivate.SaveResult(dir, reactivate.Result{Error: "boom", NeedsHuman: true}); err != nil {
-		t.Fatal(err)
-	}
-
-	_, body := get(t, &Health{DataDir: dir, Store: session.NewStore(dir)})
-	if body["status"] != "down" {
-		t.Errorf("status is %q, expected down", body["status"])
-	}
-	if got, _ := body["session"].(string); !strings.Contains(got, "no session imported") {
-		t.Errorf("session reads %q, expected the session's own reason", got)
-	}
-}
-
-func TestHealthReportsAPassThatNeedsAHuman(t *testing.T) {
-	dir := t.TempDir()
-	store := session.NewStore(dir)
-	sess := session.New("a.b.c.d.e")
-	sess.Expires = time.Now().Add(20 * 24 * time.Hour)
-	if err := store.Save(sess); err != nil {
-		t.Fatal(err)
-	}
-	if err := reactivate.SaveResult(dir, reactivate.Result{Error: "rejected", NeedsHuman: true}); err != nil {
-		t.Fatal(err)
-	}
-
-	_, body := get(t, &Health{DataDir: dir, Store: store, WarnBefore: 72 * time.Hour})
-	if body["status"] != "down" {
-		t.Errorf("status is %q, expected down", body["status"])
-	}
-	if got, _ := body["session"].(string); !strings.Contains(got, "rejected") {
-		t.Errorf("session reads %q, expected the pass error", got)
-	}
-}
-
-func TestHealthCarriesTheLastRun(t *testing.T) {
-	dir := t.TempDir()
-	store := session.NewStore(dir)
-	if err := store.Save(session.New("a.b.c.d.e")); err != nil {
-		t.Fatal(err)
-	}
-	if err := reactivate.SaveResult(dir, reactivate.Result{Catalogue: 11, Expired: 9}); err != nil {
-		t.Fatal(err)
-	}
-
-	_, body := get(t, &Health{DataDir: dir, Store: store})
-	last, ok := body["last_run"].(map[string]any)
-	if !ok {
-		t.Fatalf("no last_run in %v", body)
-	}
-	if last["catalogue"] != 11.0 || last["expired"] != 9.0 {
-		t.Errorf("last_run came back as %v", last)
+	if body["next_watch"] != "2026-10-18T01:00:00Z" {
+		t.Errorf("next_watch is %v", body["next_watch"])
 	}
 }
