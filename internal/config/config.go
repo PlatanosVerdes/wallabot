@@ -49,10 +49,9 @@ type Config struct {
 	PlacesURL string
 
 	LogJSON bool
-	// StatsAddr is where muninn reads who uses the bot; empty serves nothing. It lists names.
+	// StatsAddr exposes /bot-stats; empty turns it off. It lists names: never publish it.
 	StatsAddr string
-	// BotName is the bot's username, as muninn shows it.
-	BotName string
+	BotName   string
 }
 
 func Load() (Config, error) {

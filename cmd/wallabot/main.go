@@ -551,7 +551,6 @@ func cmdSign(cfg config.Config, args []string) error {
 	return nil
 }
 
-// serveStats answers muninn with the bot's /bot-stats, and wallabot's own figures: the searches.
 func serveStats(addr string, rec *botstats.Recorder, name string, people *users.Store, log *slog.Logger) {
 	about := func() botstats.About {
 		searches, muted := 0, 0

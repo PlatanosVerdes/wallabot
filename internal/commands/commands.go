@@ -52,8 +52,7 @@ type Listener struct {
 	Backoff  time.Duration
 	// StaleAfter drops older messages: after a restart the queue may hold hours-old ones.
 	StaleAfter time.Duration
-	// Stats, when set, counts who writes and what the gate turns away, for muninn.
-	Stats *botstats.Recorder
+	Stats      *botstats.Recorder
 }
 
 // Serve is the only getUpdates caller in the service.
@@ -115,7 +114,7 @@ func (l *Listener) menu() []telegram.Command {
 
 func (l *Listener) allowed(chat string) bool { return l.Allowed != nil && l.Allowed(chat) }
 
-// count records an update, the ones that end up ignored too: a flood shows as traffic.
+// Ignored updates count too, so a flood shows in the stats.
 func (l *Listener) count(c telegram.Chat) {
 	if l.Stats != nil {
 		l.Stats.Message(strconv.FormatInt(c.ID, 10), strings.TrimSpace(c.FirstName+" "+c.LastName), c.Username)
