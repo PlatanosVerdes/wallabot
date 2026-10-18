@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/gonana/botstats"
 	"github.com/PlatanosVerdes/wallabot/internal/telegram"
+	"path/filepath"
 )
 
 func TestParse(t *testing.T) {
@@ -394,5 +396,28 @@ func TestQueuedPressIsNotReplayed(t *testing.T) {
 
 	if ran {
 		t.Fatal("a press queued before the restart was acted on")
+	}
+}
+
+func TestStatsCountWhoWritesAndWhatTheGateTurnsAway(t *testing.T) {
+	stranger := message(2, 999999, "/estado")
+	stranger.Message.Chat.FirstName, stranger.Message.Chat.Username = "Eve", "eve"
+	fake := &telegramFake{updates: []telegram.Update{stranger, message(3, 1308329178, "/estado")}, serveOn: 3}
+	rec, err := botstats.Open(filepath.Join(t.TempDir(), "stats.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listenWith(t, fake, &Listener{
+		Commands: []Command{{Name: "estado", Run: func(context.Context, Request) (Reply, error) { return Say("ok"), nil }}},
+		Stats:    rec,
+	})
+	s := rec.Snapshot(botstats.About{})
+	if s.Users.Total != 2 || s.Traffic.Messages24h != 2 || s.Traffic.Rejected24h != 1 {
+		t.Fatalf("users %+v traffic %+v, want 2 people, 2 messages, the stranger's turned away", s.Users, s.Traffic)
+	}
+	for _, p := range s.People {
+		if p.ID == "999999" && (p.Name != "Eve" || p.Username != "eve") {
+			t.Errorf("the stranger is recorded as %+v", p)
+		}
 	}
 }

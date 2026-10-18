@@ -49,6 +49,10 @@ type Config struct {
 	PlacesURL string
 
 	LogJSON bool
+	// StatsAddr is where muninn reads who uses the bot; empty serves nothing. It lists names.
+	StatsAddr string
+	// BotName is the bot's username, as muninn shows it.
+	BotName string
 }
 
 func Load() (Config, error) {
@@ -79,7 +83,9 @@ func Load() (Config, error) {
 		SeenTTL:        duration("WALLA_SEEN_TTL", 30*24*time.Hour),
 		PlacesURL:      env("WALLA_PLACES_URL", places.DefaultURL),
 
-		LogJSON: env("WALLA_LOG_JSON", "") == "1",
+		LogJSON:   env("WALLA_LOG_JSON", "") == "1",
+		StatsAddr: env("WALLA_STATS_ADDR", ""),
+		BotName:   env("WALLA_BOT_NAME", ""),
 	}
 
 	// A zero wait turns the ticker into a spin loop.

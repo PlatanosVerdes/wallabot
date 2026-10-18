@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/PlatanosVerdes/gonana/botstats"
 	"github.com/PlatanosVerdes/wallabot/internal/commands"
 	"github.com/PlatanosVerdes/wallabot/internal/config"
 	"github.com/PlatanosVerdes/wallabot/internal/metrics"
@@ -172,6 +173,15 @@ func cmdServe(cfg config.Config, log *slog.Logger, args []string) error {
 			OnText:   b.onText,
 			OnButton: b.onButton,
 			Log:      log,
+		}
+		if cfg.StatsAddr != "" {
+			rec, err := botstats.Open(filepath.Join(cfg.DataDir, "bot-stats.json"))
+			if err != nil {
+				return err
+			}
+			listener.Stats = rec
+			go rec.Loop(ctx)
+			go serveStats(cfg.StatsAddr, rec, cfg.BotName, people, log)
 		}
 		listener.Commands = b.commands(listener)
 		go func() {
@@ -539,4 +549,28 @@ func cmdSign(cfg config.Config, args []string) error {
 	}
 	fmt.Println(sig)
 	return nil
+}
+
+// serveStats answers muninn with the bot's /bot-stats, and wallabot's own figures: the searches.
+func serveStats(addr string, rec *botstats.Recorder, name string, people *users.Store, log *slog.Logger) {
+	about := func() botstats.About {
+		searches, muted := 0, 0
+		for _, u := range people.Active() {
+			for _, s := range u.Searches {
+				searches++
+				if s.Muted {
+					muted++
+				}
+			}
+		}
+		return botstats.About{Platform: "telegram", Bot: name, Name: "wallabot", Extra: []botstats.Extra{
+			{Label: "People let in", Value: strconv.Itoa(len(people.Active()))},
+			{Label: "Searches", Value: strconv.Itoa(searches)},
+			{Label: "Muted searches", Value: strconv.Itoa(muted)},
+		}}
+	}
+	srv := &http.Server{Addr: addr, Handler: rec.Handler(about), ReadHeaderTimeout: 5 * time.Second}
+	if err := srv.ListenAndServe(); err != nil {
+		log.Warn("bot stats stopped", "err", err)
+	}
 }
