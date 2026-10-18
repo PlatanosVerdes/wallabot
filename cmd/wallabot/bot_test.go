@@ -17,6 +17,7 @@ import (
 	"github.com/PlatanosVerdes/wallabot/internal/telegram"
 	"github.com/PlatanosVerdes/wallabot/internal/users"
 	"github.com/PlatanosVerdes/wallabot/internal/wallapop"
+	"github.com/PlatanosVerdes/wallabot/internal/watch"
 )
 
 const (
@@ -326,5 +327,22 @@ func TestCheckOffersEverySearchAndAll(t *testing.T) {
 	keys := checkKeys(user)
 	if len(keys.Rows) != 3 || keys.Rows[2][0].Data != buttonCheck {
 		t.Fatalf("the choice was drawn as %+v", keys.Rows)
+	}
+}
+
+func TestTheSearchesSayWhenTheyWereLastRead(t *testing.T) {
+	user := users.User{Searches: []users.Search{{ID: "a", Name: "kallax"}}}
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+
+	if text := searchesText(user, watch.Result{}, now); strings.Contains(text, "Última revisión") {
+		t.Fatalf("a bot that never ran claims a round: %q", text)
+	}
+	last := watch.Result{StartedAt: now.Add(-5 * time.Minute), Duration: time.Minute}
+	if text := searchesText(user, last, now); !strings.Contains(text, "hace 4 min") {
+		t.Fatalf("the last round is not told: %q", text)
+	}
+	last.Failures = []watch.Failure{{Search: "kallax", Error: "403"}}
+	if text := searchesText(user, last, now); !strings.Contains(text, "con errores") {
+		t.Fatalf("a failed round looks clean: %q", text)
 	}
 }
