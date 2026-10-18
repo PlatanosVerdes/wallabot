@@ -121,7 +121,7 @@ func (b *botState) commands(listener *commands.Listener) []commands.Command {
 			Help: "Cómo funciona",
 			Run: func(context.Context, commands.Request) (commands.Reply, error) {
 				return commands.Say(intro + "\n\n" + howToAdd + "\n\n" + commands.Help(listener.Commands) +
-					"\n\n" + signature()), nil
+					"\n\n" + signature(buildVersion)), nil
 			},
 		},
 	}
@@ -141,13 +141,9 @@ const (
 	repo   = "https://github.com/" + author + "/wallabot"
 )
 
-// signature leaves the version out of a local build.
-func signature() string {
-	name := `<a href="` + repo + `">wallabot</a>`
-	if buildVersion != "local" {
-		name += " " + telegram.Escape(buildVersion)
-	}
-	return "🛠 " + name + ` · hecho por <a href="https://github.com/` + author + `">@` + author + "</a>"
+func signature(version string) string {
+	return `<a href="https://t.me/WuallaBot">wallabot</a> <a href="` + repo + `">` + telegram.Escape(version) +
+		`</a> · hecho por <a href="https://github.com/` + author + `">@` + author + "</a>"
 }
 
 const defaultRadiusKm = 30
@@ -170,7 +166,7 @@ func (b *botState) start(_ context.Context, req commands.Request) (commands.Repl
 		return commands.Reply{}, err
 	}
 	b.log.Info("a chat joined", "chat", chat, "name", name)
-	return commands.Say("👋 ¡Hola! " + intro + "\n\n" + howToAdd + "\n\n" + signature()), nil
+	return commands.Say("👋 ¡Hola! " + intro + "\n\n" + howToAdd + "\n\n" + signature(buildVersion)), nil
 }
 
 func (b *botState) onText(ctx context.Context, req commands.Request) (commands.Reply, error) {

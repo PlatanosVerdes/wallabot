@@ -346,3 +346,10 @@ func TestTheSearchesSayWhenTheyWereLastRead(t *testing.T) {
 		t.Fatalf("a failed round looks clean: %q", text)
 	}
 }
+
+func TestTheSignatureLinksTheBotTheRepoAndTheAuthor(t *testing.T) {
+	want := `<a href="https://t.me/WuallaBot">wallabot</a> <a href="https://github.com/PlatanosVerdes/wallabot">v2026.10.18.1</a> · hecho por <a href="https://github.com/PlatanosVerdes">@PlatanosVerdes</a>`
+	if got := signature("v2026.10.18.1"); got != want {
+		t.Errorf("got %s", got)
+	}
+}
