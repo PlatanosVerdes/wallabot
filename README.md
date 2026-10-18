@@ -100,6 +100,8 @@ wallabot searches add --chat <id> '<address or text>'
 | `WALLA_PORT` | `8000` | `/healthz` port |
 | `WALLA_PUSHGATEWAY` | – | Where metrics go |
 | `WALLA_LOG_JSON` | – | `1` for JSON logs |
+| `WALLA_STATS_ADDR` | – | An address such as `:9180` that exposes the bot's stats at `/bot-stats`: who uses it, its traffic and what the gate turned away (`gonana/botstats`, kept in `bot-stats.json` in the data folder). It lists names: never publish it |
+| `WALLA_BOT_NAME` | – | The bot's username, named in its stats |
 
 Endpoints can be overridden without a rebuild: `WALLA_BASE_URL`, `WALLA_WEB_URL`, `WALLA_PATH_SEARCH`, `WALLA_SIGN_SCHEME`, `WALLA_APP_VERSION`.
 

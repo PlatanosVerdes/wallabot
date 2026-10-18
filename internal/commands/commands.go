@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/PlatanosVerdes/gonana/botstats"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -51,6 +52,7 @@ type Listener struct {
 	Backoff  time.Duration
 	// StaleAfter drops older messages: after a restart the queue may hold hours-old ones.
 	StaleAfter time.Duration
+	Stats      *botstats.Recorder
 }
 
 // Serve is the only getUpdates caller in the service.
@@ -112,8 +114,22 @@ func (l *Listener) menu() []telegram.Command {
 
 func (l *Listener) allowed(chat string) bool { return l.Allowed != nil && l.Allowed(chat) }
 
+// Ignored updates count too, so a flood shows in the stats.
+func (l *Listener) count(c telegram.Chat) {
+	if l.Stats != nil {
+		l.Stats.Message(strconv.FormatInt(c.ID, 10), strings.TrimSpace(c.FirstName+" "+c.LastName), c.Username)
+	}
+}
+
+func (l *Listener) reject() {
+	if l.Stats != nil {
+		l.Stats.Rejected()
+	}
+}
+
 func (l *Listener) handle(ctx context.Context, msg telegram.Message) {
 	chat := strconv.FormatInt(msg.Chat.ID, 10)
+	l.count(msg.Chat)
 	name, args := parse(msg.Text)
 	req := Request{Chat: msg.Chat, Args: args, Location: msg.Location}
 
@@ -129,6 +145,9 @@ func (l *Listener) handle(ctx context.Context, msg telegram.Message) {
 
 	if name == "" {
 		if l.OnText == nil || !l.allowed(chat) {
+			if l.OnText != nil {
+				l.reject()
+			}
 			return
 		}
 		l.answer(ctx, chat, "text", func() (Reply, error) { return l.OnText(ctx, req) })
@@ -141,6 +160,7 @@ func (l *Listener) handle(ctx context.Context, msg telegram.Message) {
 		}
 		if !cmd.Open && !l.allowed(chat) {
 			l.Log.Warn("a command from a chat not let in was ignored", "chat", chat, "name", name)
+			l.reject()
 			return
 		}
 		l.Log.Info("command", "name", name, "chat", chat, "lag", lag)
@@ -167,8 +187,12 @@ func (l *Listener) answer(ctx context.Context, chat, what string, run func() (Re
 }
 
 func (l *Listener) press(ctx context.Context, query telegram.CallbackQuery) {
+	if query.Message != nil {
+		l.count(query.Message.Chat)
+	}
 	if query.Message == nil || !l.allowed(strconv.FormatInt(query.Message.Chat.ID, 10)) {
 		l.Log.Warn("a button press from a chat not let in was ignored")
+		l.reject()
 		_ = l.Bot.Answer(ctx, query.ID, "")
 		return
 	}

@@ -49,6 +49,9 @@ type Config struct {
 	PlacesURL string
 
 	LogJSON bool
+	// StatsAddr exposes /bot-stats; empty turns it off. It lists names: never publish it.
+	StatsAddr string
+	BotName   string
 }
 
 func Load() (Config, error) {
@@ -79,7 +82,9 @@ func Load() (Config, error) {
 		SeenTTL:        duration("WALLA_SEEN_TTL", 30*24*time.Hour),
 		PlacesURL:      env("WALLA_PLACES_URL", places.DefaultURL),
 
-		LogJSON: env("WALLA_LOG_JSON", "") == "1",
+		LogJSON:   env("WALLA_LOG_JSON", "") == "1",
+		StatsAddr: env("WALLA_STATS_ADDR", ""),
+		BotName:   env("WALLA_BOT_NAME", ""),
 	}
 
 	// A zero wait turns the ticker into a spin loop.
