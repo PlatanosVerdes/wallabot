@@ -28,7 +28,7 @@ For filters the text cannot say (category, condition, brand and model), make the
 | Command | What it does |
 | :--- | :--- |
 | `/nueva <search>` | Same as writing it, or pasting the address |
-| `/busquedas` | Your searches: 🔔 silence, ✏️ rename, 🗑 delete |
+| `/busquedas` | Your searches: 🔔 silence, ✏️ rename, 🗑 delete, and when the last round ended |
 | `/ahora` | Check one search, or all, right now |
 | `/baja` | Leave and delete your searches |
 | `/ayuda` | Help |

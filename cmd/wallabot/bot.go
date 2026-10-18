@@ -85,7 +85,7 @@ func (b *botState) commands(listener *commands.Listener) []commands.Command {
 			Help: "Ver y editar tus búsquedas",
 			Run: func(_ context.Context, req commands.Request) (commands.Reply, error) {
 				user, _ := b.people.Get(req.ChatID())
-				return commands.Reply{Text: searchesText(user), Keys: searchKeys(user)}, nil
+				return commands.Reply{Text: searchesText(user, b.lastRound(), time.Now()), Keys: searchKeys(user)}, nil
 			},
 		},
 		{
@@ -120,7 +120,8 @@ func (b *botState) commands(listener *commands.Listener) []commands.Command {
 			Name: "ayuda",
 			Help: "Cómo funciona",
 			Run: func(context.Context, commands.Request) (commands.Reply, error) {
-				return commands.Say(intro + "\n\n" + howToAdd + "\n\n" + commands.Help(listener.Commands)), nil
+				return commands.Say(intro + "\n\n" + howToAdd + "\n\n" + commands.Help(listener.Commands) +
+					"\n\n" + signature()), nil
 			},
 		},
 	}
@@ -134,6 +135,20 @@ const (
 		"Para más filtros, haz la búsqueda en es.wallapop.com desde el navegador y pégame el enlace; " +
 		"lo que escribas delante será su nombre.</i>"
 )
+
+const (
+	author = "PlatanosVerdes"
+	repo   = "https://github.com/" + author + "/wallabot"
+)
+
+// signature leaves the version out of a local build.
+func signature() string {
+	name := `<a href="` + repo + `">wallabot</a>`
+	if buildVersion != "local" {
+		name += " " + telegram.Escape(buildVersion)
+	}
+	return "🛠 " + name + ` · hecho por <a href="https://github.com/` + author + `">@` + author + "</a>"
+}
 
 const defaultRadiusKm = 30
 
@@ -155,7 +170,7 @@ func (b *botState) start(_ context.Context, req commands.Request) (commands.Repl
 		return commands.Reply{}, err
 	}
 	b.log.Info("a chat joined", "chat", chat, "name", name)
-	return commands.Say("👋 ¡Hola! " + intro + "\n\n" + howToAdd), nil
+	return commands.Say("👋 ¡Hola! " + intro + "\n\n" + howToAdd + "\n\n" + signature()), nil
 }
 
 func (b *botState) onText(ctx context.Context, req commands.Request) (commands.Reply, error) {
@@ -435,7 +450,13 @@ func searchKeys(user users.User) *telegram.Keyboard {
 	return keys
 }
 
-func searchesText(user users.User) string {
+// lastRound is zero until a full round has been saved.
+func (b *botState) lastRound() watch.Result {
+	res, _ := watch.LoadResult(b.cfg.DataDir)
+	return res
+}
+
+func searchesText(user users.User, last watch.Result, now time.Time) string {
 	if len(user.Searches) == 0 {
 		return "🔎 <b>Aún no tienes búsquedas</b>\n\n" + howToAdd
 	}
@@ -451,5 +472,24 @@ func searchesText(user users.User) string {
 		fmt.Fprintf(&t, " - %d silenciadas", muted)
 	}
 	t.WriteString("\n<i>🔔 silenciar - ✏️ renombrar - 🗑 eliminar</i>")
+	if !last.StartedAt.IsZero() {
+		fmt.Fprintf(&t, "\n\n🕐 Última revisión %s", ago(last.StartedAt.Add(last.Duration), now))
+		if !last.OK() {
+			t.WriteString(", con errores ⚠️")
+		}
+	}
 	return t.String()
+}
+
+func ago(at, now time.Time) string {
+	d := now.Sub(at)
+	switch {
+	case d < time.Minute:
+		return "hace un momento"
+	case d < time.Hour:
+		return fmt.Sprintf("hace %d min", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("hace %d h", int(d.Hours()))
+	}
+	return fmt.Sprintf("hace %d días", int(d.Hours()/24))
 }
