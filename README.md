@@ -1,4 +1,13 @@
-# wallabot
+<p align="center">
+  <img src="assets/icon.jpg" width="96" alt="">
+</p>
+
+<h1 align="center">wallabot</h1>
+
+<p align="center">
+  <a href="https://github.com/PlatanosVerdes/wallabot/tags"><img src="https://img.shields.io/github/v/tag/PlatanosVerdes/wallabot?label=release&color=2f7d3a" alt="Latest release"></a>
+  <a href="https://t.me/WuallaBot"><img src="https://img.shields.io/badge/telegram-@WuallaBot-26a5e4?logo=telegram&logoColor=white" alt="Telegram @WuallaBot"></a>
+</p>
 
 **[@WuallaBot](https://t.me/WuallaBot)**: a public Telegram bot that tells you when something new appears in your Wallapop searches.
 
