@@ -413,7 +413,6 @@ func (b *botState) onButton(ctx context.Context, chat, data string) (string, *te
 	return "", nil, nil
 }
 
-// titleOf falls back to a generic name when the listing is no longer in the seen list.
 func (b *botState) titleOf(chat, id string) string {
 	if seen, err := watch.LoadSeen(userDir(b.cfg, chat)); err == nil {
 		if rec, ok := seen.Record(id); ok && rec.Title != "" {

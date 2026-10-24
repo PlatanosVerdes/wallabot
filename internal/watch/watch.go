@@ -68,14 +68,13 @@ type Result struct {
 	DryRun    bool          `json:"dry_run,omitempty"`
 	Users     int           `json:"users"`
 	// Shared is how many searches were answered by another chat's identical request.
-	Requests int  `json:"requests"`
-	Shared   int  `json:"shared,omitempty"`
-	Deep     bool `json:"deep,omitempty"`
-	Watched  int  `json:"watched"`
-	Silenced int  `json:"silenced,omitempty"`
-	// MutedProducts counts listings skipped because the chat silenced them.
-	MutedProducts int `json:"muted_products,omitempty"`
-	Scanned       int `json:"scanned"`
+	Requests      int  `json:"requests"`
+	Shared        int  `json:"shared,omitempty"`
+	Deep          bool `json:"deep,omitempty"`
+	Watched       int  `json:"watched"`
+	Silenced      int  `json:"silenced,omitempty"`
+	MutedProducts int  `json:"muted_products,omitempty"`
+	Scanned       int  `json:"scanned"`
 	// Seeded is recorded without a message: a first pass, or too old to be news.
 	Seeded     int       `json:"seeded"`
 	Duplicates int       `json:"duplicates"`

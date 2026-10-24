@@ -23,12 +23,11 @@ var (
 )
 
 type User struct {
-	Chat     string    `json:"chat"`
-	Name     string    `json:"name"`
-	Active   bool      `json:"active"`
-	Since    time.Time `json:"since"`
-	Searches []Search  `json:"searches,omitempty"`
-	// MutedProducts are single listings the chat no longer wants news of, whatever search finds them.
+	Chat          string    `json:"chat"`
+	Name          string    `json:"name"`
+	Active        bool      `json:"active"`
+	Since         time.Time `json:"since"`
+	Searches      []Search  `json:"searches,omitempty"`
 	MutedProducts []Product `json:"muted_products,omitempty"`
 }
 
