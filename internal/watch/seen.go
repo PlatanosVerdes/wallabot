@@ -81,6 +81,14 @@ func (s *Seen) reindex() {
 	}
 }
 
+func (s *Seen) Record(id string) (Record, bool) {
+	i, ok := s.index[id]
+	if !ok {
+		return Record{}, false
+	}
+	return s.Records[i], true
+}
+
 func (s *Seen) Known(id string) bool {
 	_, ok := s.index[id]
 	return ok

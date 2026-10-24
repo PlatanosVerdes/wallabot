@@ -25,10 +25,11 @@ For filters the text cannot say (category, condition, brand and model), make the
 | :--- | :--- |
 | `/nueva <search>` | Same as writing it, or pasting the address |
 | `/busquedas` | Your searches: 🔔 silence, ✏️ rename, 🗑 delete, and when the last round ended |
+| `/silenciados` | Listings you silenced one by one; press one to be told about it again |
 | `/ahora` | Check one search, or all, right now |
 | `/baja` | Leave and delete your searches |
 | `/ayuda` | Help |
 
-Each listing arrives with its photo, price, town, the details Wallapop shows for it (year and km for a motorbike, condition, colour and material for furniture, whether it ships), and two buttons: open it, or silence that search. Details already in the title are left out, and a listing whose details cannot be read is sent without them.
+Each listing arrives with its photo, price, town, the details Wallapop shows for it (year and km for a motorbike, condition, colour and material for furniture, whether it ships), and three buttons: open it, silence that search, or silence that one listing (no more notices about it, price drops included). Details already in the title are left out, and a listing whose details cannot be read is sent without them.
 
 Each chat only sees its own searches. Up to `WALLA_MAX_USERS` chats, `WALLA_MAX_SEARCHES` searches each.

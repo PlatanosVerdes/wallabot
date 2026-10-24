@@ -419,3 +419,38 @@ func TestADeeperReadIsNotAnsweredByAShallowOne(t *testing.T) {
 		t.Fatalf("the shallow read after a deep one went out again: shared=%d", catalogue.Shared)
 	}
 }
+
+func TestAMutedListingIsNeverAnnounced(t *testing.T) {
+	searches := []Search{newSearch("s1", "motos")}
+	fake := &fakeWallapop{}
+	client, opt := newWatcher(t, fake)
+	opt.Drop = 0.05
+	opt.Muted = map[string]bool{"m1": true}
+	bike := newItem("m1", "Yamaha XSR900", 9000, time.Minute, fake.photo("m1"))
+	other := newItem("m2", "Honda CB500", 5000, time.Minute, fake.photo("m2"))
+	fake.items = []wallapop.SearchItem{bike, other}
+
+	seen, _ := LoadSeen(t.TempDir())
+	notify := &recorder{}
+	Run(context.Background(), client, seen, searches, notify, opt, quiet())
+	if len(notify.listings) != 0 {
+		t.Fatalf("the first round was not silent: %v", notify.listings)
+	}
+
+	fake.items = []wallapop.SearchItem{newItem("m3", "Kawasaki Z650", 6000, time.Minute, fake.photo("m3"))}
+	fake.items = append(fake.items, bike)
+	res := Run(context.Background(), client, seen, searches, notify, opt, quiet())
+	if len(notify.listings) != 1 || !strings.Contains(notify.listings[0], "Kawasaki") {
+		t.Fatalf("the muted listing was announced: %v", notify.listings)
+	}
+	if res.MutedProducts != 1 {
+		t.Fatalf("MutedProducts = %d", res.MutedProducts)
+	}
+
+	bike.Price.Amount = 7000
+	fake.items = []wallapop.SearchItem{bike, other}
+	Run(context.Background(), client, seen, searches, notify, opt, quiet())
+	if len(notify.cheaper) != 0 {
+		t.Fatalf("a muted listing announced its price drop: %v", notify.cheaper)
+	}
+}

@@ -20,15 +20,18 @@ import (
 
 // Telegram caps callback data at 64 bytes: a one-letter verb, then a search or chat id.
 const (
-	buttonToggle    = "t:"
-	buttonMute      = "m:"
-	buttonAskDelete = "d:"
-	buttonRename    = "e:"
-	buttonCheck     = "n:"
-	buttonDelete    = "D:"
-	buttonKeep      = "k:"
-	buttonLeave     = "B:"
-	buttonStay      = "x:"
+	buttonToggle       = "t:"
+	buttonMute         = "m:"
+	buttonAskDelete    = "d:"
+	buttonRename       = "e:"
+	buttonCheck        = "n:"
+	buttonDelete       = "D:"
+	buttonKeep         = "k:"
+	buttonLeave        = "B:"
+	buttonStay         = "x:"
+	buttonMuteItem     = "p:"
+	buttonUnmuteItem   = "P:"
+	buttonUnmuteListed = "u:"
 )
 
 // botState shows each chat its own searches only: nothing of other chats or the owner's account.
@@ -86,6 +89,14 @@ func (b *botState) commands(listener *commands.Listener) []commands.Command {
 			Run: func(_ context.Context, req commands.Request) (commands.Reply, error) {
 				user, _ := b.people.Get(req.ChatID())
 				return commands.Reply{Text: searchesText(user, b.lastRound(), time.Now()), Keys: searchKeys(user)}, nil
+			},
+		},
+		{
+			Name: "silenciados",
+			Help: "Ver los anuncios silenciados",
+			Run: func(_ context.Context, req commands.Request) (commands.Reply, error) {
+				user, _ := b.people.Get(req.ChatID())
+				return commands.Reply{Text: mutedProductsText(user), Keys: mutedProductKeys(user)}, nil
 			},
 		},
 		{
@@ -302,6 +313,38 @@ func (b *botState) onButton(ctx context.Context, chat, data string) (string, *te
 		done := &telegram.Keyboard{Rows: [][]telegram.Button{{telegram.Off("🔕 " + search.Name + " silenciada")}}}
 		return "Silenciada. Se reactiva en /busquedas", done, nil
 
+	case buttonMuteItem:
+		title := b.titleOf(chat, arg)
+		if err := b.people.MuteProduct(chat, users.Product{ID: arg, Title: title, Added: time.Now()}); err != nil {
+			return err.Error(), nil, nil
+		}
+		keys := &telegram.Keyboard{Rows: [][]telegram.Button{{
+			{Text: "🔗 Ver anuncio", URL: wallapop.ItemURL + arg},
+			{Text: "🔔 Reactivar anuncio", Data: buttonUnmuteItem + arg},
+		}}}
+		return "Anuncio silenciado. Se reactiva en /silenciados", keys, nil
+
+	case buttonUnmuteItem:
+		if err := b.people.UnmuteProduct(chat, arg); err != nil {
+			return err.Error(), nil, nil
+		}
+		keys := &telegram.Keyboard{Rows: [][]telegram.Button{{
+			{Text: "🔗 Ver anuncio", URL: wallapop.ItemURL + arg, Style: "primary"},
+			{Text: "🙈 Silenciar anuncio", Data: buttonMuteItem + arg},
+		}}}
+		return "Vuelvo a avisarte de este anuncio", keys, nil
+
+	case buttonUnmuteListed:
+		if err := b.people.UnmuteProduct(chat, arg); err != nil {
+			return err.Error(), nil, nil
+		}
+		user, _ := b.people.Get(chat)
+		keys := mutedProductKeys(user)
+		if keys == nil {
+			keys = &telegram.Keyboard{}
+		}
+		return "Vuelvo a avisarte de este anuncio", keys, nil
+
 	case buttonRename:
 		search, err := b.people.Search(chat, arg)
 		if err != nil {
@@ -370,6 +413,16 @@ func (b *botState) onButton(ctx context.Context, chat, data string) (string, *te
 	return "", nil, nil
 }
 
+// titleOf falls back to a generic name when the listing is no longer in the seen list.
+func (b *botState) titleOf(chat, id string) string {
+	if seen, err := watch.LoadSeen(userDir(b.cfg, chat)); err == nil {
+		if rec, ok := seen.Record(id); ok && rec.Title != "" {
+			return rec.Title
+		}
+	}
+	return "Anuncio " + id
+}
+
 func (b *botState) keysOf(chat string) *telegram.Keyboard {
 	user, _ := b.people.Get(chat)
 	if keys := searchKeys(user); keys != nil {
@@ -424,7 +477,33 @@ func listingKeys(search watch.Search, item wallapop.SearchItem) *telegram.Keyboa
 	return &telegram.Keyboard{Rows: [][]telegram.Button{{
 		{Text: "🔗 Ver anuncio", URL: item.URL(), Style: "primary"},
 		{Text: "🔕 Silenciar", Data: buttonMute + search.ID, Style: "danger"},
+	}, {
+		{Text: "🙈 Silenciar anuncio", Data: buttonMuteItem + item.ID},
 	}}}
+}
+
+func mutedProductKeys(user users.User) *telegram.Keyboard {
+	keys := &telegram.Keyboard{}
+	for _, product := range user.MutedProducts {
+		title := []rune(product.Title)
+		if len(title) > nameLimit {
+			title = title[:nameLimit]
+		}
+		keys.Rows = append(keys.Rows, []telegram.Button{
+			{Text: "🙈 " + string(title), Data: buttonUnmuteListed + product.ID},
+		})
+	}
+	if len(keys.Rows) == 0 {
+		return nil
+	}
+	return keys
+}
+
+func mutedProductsText(user users.User) string {
+	if len(user.MutedProducts) == 0 {
+		return "🙈 <b>No tienes anuncios silenciados</b>\n<i>Los silencias con el botón de cada aviso</i>"
+	}
+	return "🙈 <b>Anuncios silenciados</b>\n<i>Pulsa uno para volver a recibir avisos</i>"
 }
 
 func searchKeys(user users.User) *telegram.Keyboard {

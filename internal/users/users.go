@@ -28,6 +28,14 @@ type User struct {
 	Active   bool      `json:"active"`
 	Since    time.Time `json:"since"`
 	Searches []Search  `json:"searches,omitempty"`
+	// MutedProducts are single listings the chat no longer wants news of, whatever search finds them.
+	MutedProducts []Product `json:"muted_products,omitempty"`
+}
+
+type Product struct {
+	ID    string    `json:"id"`
+	Title string    `json:"title"`
+	Added time.Time `json:"added"`
 }
 
 type Search struct {
@@ -300,6 +308,53 @@ func (s *Store) SetMuted(chat, id string, muted bool) (Search, error) {
 	return Search{}, ErrNoSuchSearch
 }
 
+func (s *Store) MuteProduct(chat string, product Product) error {
+	if err := s.lock(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	defer s.mu.Unlock()
+	user, ok := s.users[chat]
+	if !ok {
+		return ErrUnknown
+	}
+	for _, muted := range user.MutedProducts {
+		if muted.ID == product.ID {
+			return nil
+		}
+	}
+	user.MutedProducts = append(user.MutedProducts, product)
+	return s.save()
+}
+
+func (s *Store) UnmuteProduct(chat, id string) error {
+	if err := s.lock(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	defer s.mu.Unlock()
+	user, ok := s.users[chat]
+	if !ok {
+		return ErrUnknown
+	}
+	for i, muted := range user.MutedProducts {
+		if muted.ID == id {
+			user.MutedProducts = append(user.MutedProducts[:i], user.MutedProducts[i+1:]...)
+			return s.save()
+		}
+	}
+	return nil
+}
+
+func (u User) MutedProduct(id string) bool {
+	for _, muted := range u.MutedProducts {
+		if muted.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Store) save() error {
 	list := make([]*User, 0, len(s.users))
 	for _, user := range s.users {
@@ -326,6 +381,7 @@ func (s *Store) save() error {
 func clone(user *User) User {
 	out := *user
 	out.Searches = append([]Search(nil), user.Searches...)
+	out.MutedProducts = append([]Product(nil), user.MutedProducts...)
 	return out
 }
 

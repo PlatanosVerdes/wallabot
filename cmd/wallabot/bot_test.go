@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -351,5 +352,55 @@ func TestTheSignatureLinksTheBotTheRepoAndTheAuthor(t *testing.T) {
 	want := `<a href="https://t.me/WuallaBot">wallabot</a> <a href="https://github.com/PlatanosVerdes/wallabot">v2026.10.18.1</a> · hecho por <a href="https://github.com/PlatanosVerdes">@PlatanosVerdes</a>`
 	if got := signature("v2026.10.18.1"); got != want {
 		t.Errorf("got %s", got)
+	}
+}
+
+func TestMutingAProductStopsItsNoticesUntilUndone(t *testing.T) {
+	b := newBot(t)
+	ctx := context.Background()
+	_, _ = b.people.Request(friendChat, "Ana", true, time.Now())
+
+	seen, _ := watch.LoadSeen(userDir(b.cfg, ownerChat))
+	seen.Add(wallapop.SearchItem{ID: "abc", Title: "Bici de montaña"}, nil, "bicis", time.Now())
+	_ = os.MkdirAll(userDir(b.cfg, ownerChat), 0o755)
+	if err := seen.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, keys, err := b.onButton(ctx, ownerChat, buttonMuteItem+"abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, _ := b.people.Get(ownerChat)
+	if len(user.MutedProducts) != 1 || user.MutedProducts[0].Title != "Bici de montaña" {
+		t.Fatalf("the product was stored as %+v", user.MutedProducts)
+	}
+	if keys == nil || keys.Rows[0][1].Data != buttonUnmuteItem+"abc" {
+		t.Fatalf("the notice has no way back: %+v", keys)
+	}
+	if friend, _ := b.people.Get(friendChat); friend.MutedProduct("abc") {
+		t.Fatal("the mute reached another chat")
+	}
+
+	list := mutedProductKeys(user)
+	if list == nil || list.Rows[0][0].Data != buttonUnmuteListed+"abc" {
+		t.Fatalf("the list was drawn as %+v", list)
+	}
+	_, keys, _ = b.onButton(ctx, ownerChat, buttonUnmuteListed+"abc")
+	if user, _ = b.people.Get(ownerChat); len(user.MutedProducts) != 0 || keys == nil || len(keys.Rows) != 0 {
+		t.Fatalf("the product stayed muted: %+v, %+v", user.MutedProducts, keys)
+	}
+
+	_, _, _ = b.onButton(ctx, ownerChat, buttonMuteItem+"abc")
+	_, keys, _ = b.onButton(ctx, ownerChat, buttonUnmuteItem+"abc")
+	if user, _ = b.people.Get(ownerChat); user.MutedProduct("abc") || keys.Rows[0][1].Data != buttonMuteItem+"abc" {
+		t.Fatalf("undoing from the notice failed: %+v", keys)
+	}
+}
+
+func TestEveryListingOffersToMuteItself(t *testing.T) {
+	keys := listingKeys(watch.Search{ID: "s1"}, wallapop.SearchItem{ID: "abc"})
+	if len(keys.Rows) != 2 || keys.Rows[1][0].Data != buttonMuteItem+"abc" {
+		t.Fatalf("the notice was drawn as %+v", keys.Rows)
 	}
 }
