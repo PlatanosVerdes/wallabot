@@ -330,7 +330,7 @@ func (b *botState) onButton(ctx context.Context, chat, data string) (string, *te
 		}
 		keys := &telegram.Keyboard{Rows: [][]telegram.Button{{
 			{Text: "🔗 Ver anuncio", URL: wallapop.ItemURL + arg, Style: "primary"},
-			{Text: "✕ Silenciar anuncio", Data: buttonMuteItem + arg},
+			{Text: "❌ Silenciar anuncio", Data: buttonMuteItem + arg},
 		}}}
 		return "Vuelvo a avisarte de este anuncio", keys, nil
 
@@ -477,7 +477,7 @@ func listingKeys(search watch.Search, item wallapop.SearchItem) *telegram.Keyboa
 		{Text: "🔗 Ver anuncio", URL: item.URL(), Style: "primary"},
 		{Text: "🔕 Silenciar", Data: buttonMute + search.ID, Style: "danger"},
 	}, {
-		{Text: "✕ Silenciar anuncio", Data: buttonMuteItem + item.ID},
+		{Text: "❌ Silenciar anuncio", Data: buttonMuteItem + item.ID},
 	}}}
 }
 
@@ -489,7 +489,7 @@ func mutedProductKeys(user users.User) *telegram.Keyboard {
 			title = title[:nameLimit]
 		}
 		keys.Rows = append(keys.Rows, []telegram.Button{
-			{Text: "✕ " + string(title), Data: buttonUnmuteListed + product.ID},
+			{Text: "❌ " + string(title), Data: buttonUnmuteListed + product.ID},
 		})
 	}
 	if len(keys.Rows) == 0 {
@@ -500,9 +500,9 @@ func mutedProductKeys(user users.User) *telegram.Keyboard {
 
 func mutedProductsText(user users.User) string {
 	if len(user.MutedProducts) == 0 {
-		return "✕ <b>No tienes anuncios silenciados</b>\n<i>Los silencias con el botón de cada aviso</i>"
+		return "❌ <b>No tienes anuncios silenciados</b>\n<i>Los silencias con el botón de cada aviso</i>"
 	}
-	return "✕ <b>Anuncios silenciados</b>\n<i>Pulsa uno para volver a recibir avisos</i>"
+	return "❌ <b>Anuncios silenciados</b>\n<i>Pulsa uno para volver a recibir avisos</i>"
 }
 
 func searchKeys(user users.User) *telegram.Keyboard {
