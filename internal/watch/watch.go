@@ -31,6 +31,8 @@ type Options struct {
 	// Drop is a fraction of the lowest price; zero turns price drops off.
 	Drop   float64
 	DryRun bool
+	// Muted holds listing ids that are never announced, not even their price drops.
+	Muted map[string]bool
 }
 
 type Search struct {
@@ -66,12 +68,13 @@ type Result struct {
 	DryRun    bool          `json:"dry_run,omitempty"`
 	Users     int           `json:"users"`
 	// Shared is how many searches were answered by another chat's identical request.
-	Requests int  `json:"requests"`
-	Shared   int  `json:"shared,omitempty"`
-	Deep     bool `json:"deep,omitempty"`
-	Watched  int  `json:"watched"`
-	Silenced int  `json:"silenced,omitempty"`
-	Scanned  int  `json:"scanned"`
+	Requests      int  `json:"requests"`
+	Shared        int  `json:"shared,omitempty"`
+	Deep          bool `json:"deep,omitempty"`
+	Watched       int  `json:"watched"`
+	Silenced      int  `json:"silenced,omitempty"`
+	MutedProducts int  `json:"muted_products,omitempty"`
+	Scanned       int  `json:"scanned"`
 	// Seeded is recorded without a message: a first pass, or too old to be news.
 	Seeded     int       `json:"seeded"`
 	Duplicates int       `json:"duplicates"`
@@ -86,6 +89,7 @@ func (r *Result) Merge(o Result) {
 	r.Users++
 	r.Watched += o.Watched
 	r.Silenced += o.Silenced
+	r.MutedProducts += o.MutedProducts
 	r.Scanned += o.Scanned
 	r.Seeded += o.Seeded
 	r.Duplicates += o.Duplicates
@@ -116,6 +120,9 @@ func (r Result) Summary() string {
 	}
 	if r.Silenced > 0 {
 		msg += fmt.Sprintf(", %d silenciadas", r.Silenced)
+	}
+	if r.MutedProducts > 0 {
+		msg += fmt.Sprintf(", %d anuncios silenciados", r.MutedProducts)
 	}
 	if r.Duplicates > 0 {
 		msg += fmt.Sprintf(", %d repetidos descartados", r.Duplicates)
@@ -163,6 +170,10 @@ func Run(ctx context.Context, client Searcher, seen *Seen, searches []Search, no
 		sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
 
 		for _, item := range items {
+			if opt.Muted[item.ID] {
+				res.MutedProducts++
+				continue
+			}
 			if seen.Known(item.ID) {
 				before, worth := seen.Cheaper(item, opt.Drop)
 				if opt.Drop <= 0 || !worth {

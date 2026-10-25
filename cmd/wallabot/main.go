@@ -411,6 +411,13 @@ func runWatch(ctx context.Context, cfg config.Config, people *users.Store, log *
 			total.Failures = append(total.Failures, watch.Failure{Search: user.Chat, Error: err.Error()})
 			continue
 		}
+		opt := opt
+		if len(user.MutedProducts) > 0 {
+			opt.Muted = make(map[string]bool, len(user.MutedProducts))
+			for _, product := range user.MutedProducts {
+				opt.Muted[product.ID] = true
+			}
+		}
 		seen, err := watch.LoadSeen(dir)
 		if err != nil {
 			log.Error("could not read what has been seen", "chat", user.Chat, "err", err)

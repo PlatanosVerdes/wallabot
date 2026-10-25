@@ -107,3 +107,34 @@ func TestAnotherWriterIsNotLost(t *testing.T) {
 		t.Fatalf("a write from the service lost the terminal's: %+v", user.Searches)
 	}
 }
+
+func TestMutedProductsAreKeptPerChatAcrossReloads(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := Load(dir)
+	now := time.Now()
+	_, _ = store.Request("1", "Ana", true, now)
+	_, _ = store.Request("2", "Luis", true, now)
+
+	product := Product{ID: "abc", Title: "Bici", Added: now}
+	for range 2 {
+		if err := store.MuteProduct("1", product); err != nil {
+			t.Fatal(err)
+		}
+	}
+	again, _ := Load(dir)
+	ana, _ := again.Get("1")
+	luis, _ := again.Get("2")
+	if len(ana.MutedProducts) != 1 || !ana.MutedProduct("abc") || luis.MutedProduct("abc") {
+		t.Fatalf("muted products reloaded as %+v and %+v", ana.MutedProducts, luis.MutedProducts)
+	}
+
+	if err := again.UnmuteProduct("1", "abc"); err != nil {
+		t.Fatal(err)
+	}
+	if ana, _ := again.Get("1"); ana.MutedProduct("abc") {
+		t.Fatal("the product is still muted after undoing it")
+	}
+	if err := again.MuteProduct("9", product); !errors.Is(err, ErrUnknown) {
+		t.Fatalf("a stranger muted a product: %v", err)
+	}
+}
